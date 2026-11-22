@@ -25,7 +25,7 @@ kde-nested:
             Which bus Plasma is on is the composing pod's choice, so KWin's renderer is
             asserted by each pod's own bed, on the bus it chose.
         require:
-            - '@github.com/opencharly/layer-kde-shell:v2026.325.1442'
+            - '@github.com/opencharly/layer-kde-shell:v2026.326.2019'
         env:
             KDE_NESTED_HOST_DISPLAY: wayland-0
             KDE_NESTED_SOCKET: wayland-kde
