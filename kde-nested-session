@@ -1,0 +1,99 @@
+#!/bin/sh
+# kde-nested-session — run a full KDE Plasma session NESTED in a host Wayland compositor.
+#
+# KWin is started as a nested compositor (`--wayland-display <host>` = the compositor it
+# renders into, `--socket <sock>` = the one it serves), then plasmashell on KWin's socket.
+# The host is whatever the pod streams or shows: headless sway (pod-kde-vnc), pixelflux
+# (pod-kde-selkies), or the cstream streamer's own compositor (pod-kde-cstream).
+#
+# Knobs (environment, all optional):
+#   KDE_NESTED_HOST_DISPLAY  the host compositor's socket            (default wayland-0)
+#   KDE_NESTED_SOCKET        the socket the nested KWin serves       (default wayland-kde)
+#   KDE_NESTED_RUNTIME_DIR   the XDG_RUNTIME_DIR both sockets live in (default: the
+#                            inherited XDG_RUNTIME_DIR -- a systemd-user venue's
+#                            /run/user/<uid> -- else /tmp)
+#   KDE_NESTED_RESOLUTION    WxH of KWin's window; empty = take the size the host
+#                            configures (a fullscreening host decides it anyway)
+#   KDE_NESTED_BUS           session (the pod's shared session bus, the default) or
+#                            private (a dbus-run-session bus of its own)
+set -u
+
+HOST="${KDE_NESTED_HOST_DISPLAY:-wayland-0}"
+SOCK="${KDE_NESTED_SOCKET:-wayland-kde}"
+RUNTIME_DIR="${KDE_NESTED_RUNTIME_DIR:-}"
+[ -n "$RUNTIME_DIR" ] || RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
+export XDG_RUNTIME_DIR="$RUNTIME_DIR"
+RES="${KDE_NESTED_RESOLUTION:-}"
+BUS="${KDE_NESTED_BUS:-session}"
+
+case "$BUS" in
+    session|private) ;;
+    *) echo "kde-nested-session: KDE_NESTED_BUS=$BUS is neither session nor private" >&2; exit 2 ;;
+esac
+
+# Condition polls, not delays: each loop ends the moment its socket exists, and gives up
+# with a named cause after TIMEOUT seconds.
+TIMEOUT=60
+wait_for() {
+    waited=0
+    while [ ! -e "$1" ] && [ "$waited" -lt "$TIMEOUT" ]; do
+        sleep 1
+        waited=$((waited + 1))
+    done
+    [ -e "$1" ]
+}
+
+echo "kde-nested-session: waiting for the host compositor at $XDG_RUNTIME_DIR/$HOST..."
+if ! wait_for "$XDG_RUNTIME_DIR/$HOST"; then
+    echo "kde-nested-session: host socket $XDG_RUNTIME_DIR/$HOST not ready after ${TIMEOUT}s" >&2
+    exit 1
+fi
+
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=KDE
+export XDG_SESSION_DESKTOP=KDE
+# Without a session manager nothing sets this, and kdotool (the wl verb's KWin window
+# backend) refuses to run: "Unsupported KDE version. kdotool only supports KDE Plasma 6."
+export KDE_SESSION_VERSION=6
+export XCURSOR_THEME=breeze_cursors
+export XCURSOR_SIZE=24
+export XKB_DEFAULT_LAYOUT="${XKB_DEFAULT_LAYOUT:-us}"
+export XKB_DEFAULT_VARIANT="${XKB_DEFAULT_VARIANT:-}"
+export XKB_DEFAULT_MODEL="${XKB_DEFAULT_MODEL:-pc105}"
+export XKB_DEFAULT_OPTIONS="${XKB_DEFAULT_OPTIONS:-}"
+
+# A restarted session leaves the previous socket and lock behind.
+rm -f "$XDG_RUNTIME_DIR/$SOCK" "$XDG_RUNTIME_DIR/$SOCK.lock"
+
+SIZE=""
+if [ -n "$RES" ]; then
+    SIZE="--width ${RES%x*} --height ${RES#*x}"
+fi
+
+# KWin is launched DIRECTLY as a nested compositor, never via startplasma-wayland: without
+# a systemd session that falls back to a headless KWin that holds no connection to the
+# host, so the host shows nothing. KWin needs WAYLAND_DISPLAY to name the host as well as
+# the flag (measured: without it the nested output stays black). It runs without its
+# cap_sys_nice file capability (stripped at build) because the pod's no-new-privileges
+# refuses to exec a file-capability binary.
+session() {
+    # shellcheck disable=SC2086 # SIZE is two flag pairs or nothing
+    WAYLAND_DISPLAY="$HOST" kwin_wayland --wayland-display "$HOST" --socket "$SOCK" --xwayland $SIZE &
+    kwin_pid=$!
+    if wait_for "$XDG_RUNTIME_DIR/$SOCK"; then
+        echo "kde-nested-session: KWin serves $SOCK, starting plasmashell"
+        WAYLAND_DISPLAY="$SOCK" plasmashell &
+    else
+        echo "kde-nested-session: KWin never served $SOCK in ${TIMEOUT}s; plasmashell not started" >&2
+    fi
+    # The session lives as long as KWin does; supervisord restarts the whole session.
+    wait "$kwin_pid"
+}
+
+if [ "$BUS" = private ]; then
+    # Re-run this launcher inside a bus of its own. dbus-run-session sets
+    # DBUS_SESSION_BUS_ADDRESS for its child, and the child runs in `session` mode on
+    # that private bus.
+    KDE_NESTED_BUS=session exec dbus-run-session -- "$0"
+fi
+session
