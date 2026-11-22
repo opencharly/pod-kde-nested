@@ -80,6 +80,13 @@ kde-nested:
                 file: ${HOME}/.local/bin/kde-nested-session
                 contains:
                     - contains: 'kwin_wayland --wayland-display "$HOST" --socket "$SOCK"'
+            - check: the launcher's private-bus branch re-execs itself under a bus of its own (`dbus-run-session`), and its resolution handling builds the width/height flags from KDE_NESTED_RESOLUTION
+              id: kde-nested-launcher-private-bus-and-resolution
+              file:
+                file: ${HOME}/.local/bin/kde-nested-session
+                contains:
+                    - contains: 'KDE_NESTED_BUS=session exec dbus-run-session -- "$0"'
+                    - contains: 'SIZE="--width ${RES%x*} --height ${RES#*x}"'
             - check: kwin_wayland carries no file capability, so it execs under no-new-privileges
               id: kde-nested-kwin-no-caps
               exit_status: 0

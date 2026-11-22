@@ -37,6 +37,11 @@ Canonical files:
 - **The leaf's runtime checks stay bus-independent.** `KDE_NESTED_BUS=private` puts KWin
   on a bus the venue's `dbus:` verb does not see, so bus-level assertions (KWin's
   renderer) belong to each pod's own bed.
-- **R10 gate:** this repo has no bed of its own. A change is proven by the consuming
-  pods' beds (`check-kde-vnc-pod`, `check-kde-cstream-pod`, the kde-selkies bed), run
-  with `CHARLY_REPO_OVERRIDE=opencharly/pod-kde-nested=<this tree>` before the PR.
+- **R10 gate:** this repo has no bed of its own. A change is proven by a consuming
+  pod's bed run with `CHARLY_REPO_OVERRIDE=opencharly/pod-kde-nested=<this tree>`.
+  Today that is `check-kde-vnc-pod` (pod-kde-vnc), which exercises the `session`-bus
+  path, `1920x1080`, socket `wayland-kde` and runtime dir `/tmp`. The other two
+  consumers' beds (`check-kde-cstream-pod`, the kde-selkies bed) land with their
+  cutovers — pod-kde-cstream does not exist yet — so until then the `private`-bus
+  branch and the per-pod knob sets are covered by this repo's launcher shape checks,
+  not by a live run; opencharly/pod-kde-nested#2 tracks the runs owed.
