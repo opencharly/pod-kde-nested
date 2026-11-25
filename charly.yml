@@ -100,7 +100,7 @@ kde-nested:
                   {
                     echo "kwin_wayland still has caps: $caps"
                     echo "file: $(ls -l /usr/bin/kwin_wayland 2>&1)"
-                    echo "pkg:  $(pacman -Q kwin 2>&1 | head -1)"
+                    echo "pkg:  $(pacman -Qo /usr/bin/kwin_wayland 2>&1 | head -1)"
                   } >&2
                   exit 1
                 fi
