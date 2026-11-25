@@ -91,8 +91,19 @@ kde-nested:
               id: kde-nested-kwin-no-caps
               exit_status: 0
               command: |
+                # Report to STDERR, not stdout: the runner records a failing check's stderr in
+                # its reason, so this is the difference between "exit=1" and knowing WHICH
+                # capability survived and which package put it there (measured failure of
+                # run 2026.327.1707 carried only "exit=1 (stderr: )").
                 caps=$(getcap /usr/bin/kwin_wayland 2>/dev/null)
-                if [ -n "$caps" ]; then echo "kwin_wayland still has caps: $caps"; exit 1; fi
+                if [ -n "$caps" ]; then
+                  {
+                    echo "kwin_wayland still has caps: $caps"
+                    echo "file: $(ls -l /usr/bin/kwin_wayland 2>&1)"
+                    echo "pkg:  $(pacman -Q kwin 2>&1 | head -1)"
+                  } >&2
+                  exit 1
+                fi
                 echo "no caps"
             - check: kdotool is installed, the wl verb's KWin window backend
               id: kde-nested-kdotool
