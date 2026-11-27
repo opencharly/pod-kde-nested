@@ -28,20 +28,23 @@ Canonical files:
 
 ## Rules specific to this repo
 
-- **One launcher for every nested Plasma.** pod-kde-vnc, pod-kde-selkies and
-  pod-kde-cstream compose this candy and set `KDE_NESTED_*`; none of them carries a
-  launcher of its own (R2). A need the knobs cannot express is a new knob here, not a
-  copy there.
+- **One launcher for every nested Plasma.** pod-kde-vnc and pod-kde-vnc-cdp (through
+  pod-kde-vnc) compose this candy and set `KDE_NESTED_*`; neither carries a launcher of
+  its own (R2). A need the knobs cannot express is a new knob here, not a copy there.
+  pod-kde-selkies and pod-kde-cstream composed this leaf too and were retired and
+  archived by opencharly/opencharly#1293.
 - **No transport, no host compositor, no GPU wiring here.** The composing pod owns those
-  (sway/wayvnc, pixelflux/selkies, cstream; pod-cdi for the GPU).
+  (sway/wayvnc; pod-cdi for the GPU).
 - **The leaf's runtime checks stay bus-independent.** `KDE_NESTED_BUS=private` puts KWin
   on a bus the venue's `dbus:` verb does not see, so bus-level assertions (KWin's
   renderer) belong to each pod's own bed.
-- **R10 gate:** this repo has no bed of its own. A change is proven by a consuming
-  pod's bed run with `CHARLY_REPO_OVERRIDE=opencharly/pod-kde-nested=<this tree>`.
-  Today that is `check-kde-vnc-pod` (pod-kde-vnc), which exercises the `session`-bus
-  path, `1920x1080`, socket `wayland-kde` and runtime dir `/tmp`. The other two
-  consumers' beds (`check-kde-cstream-pod`, the kde-selkies bed) land with their
-  cutovers — pod-kde-cstream does not exist yet — so until then the `private`-bus
-  branch and the per-pod knob sets are covered by this repo's launcher shape checks,
-  not by a live run; opencharly/pod-kde-nested#2 tracks the runs owed.
+- **R10 gate.** This repo has a bed of its own: `check-kde-nested-locked` (image
+  `kde-nested-bed-image`, `disposable: true`), which proves the leaf's screen-locker
+  policy holds across Plasma's idle timeout on the CDI GPU base. A change to the leaf's
+  runtime path is ALSO proven by a consuming pod's bed, run with
+  `CHARLY_REPO_OVERRIDE=opencharly/pod-kde-nested=<this tree>` — today
+  `check-kde-vnc-pod` (pod-kde-vnc: session bus, `1920x1080`, socket `wayland-kde`,
+  runtime dir `/tmp`) and `check-kde-vnc-cdp-pod` (the pod that adds Chrome). The
+  private-bus branch has no live consumer since the #1293 retirement — the runs it owed
+  were tracked by opencharly/pod-kde-nested#2, closed with those consumers — so it stays
+  covered by the launcher shape checks, never by a claim.
