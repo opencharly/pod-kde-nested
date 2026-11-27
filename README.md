@@ -16,8 +16,8 @@ my-desktop:
         require:
             - '@github.com/opencharly/pod-kde-nested:<tag>'
         env:
-            KDE_NESTED_HOST_DISPLAY: wayland-1     # the host's socket
-            KDE_NESTED_RUNTIME_DIR: /tmp/cstream-rt
+            KDE_NESTED_HOST_DISPLAY: wayland-0     # the host's socket
+            KDE_NESTED_RUNTIME_DIR: /tmp
 ```
 
 | variable | default | meaning |
@@ -28,6 +28,9 @@ my-desktop:
 | `KDE_NESTED_RESOLUTION` | empty | `WxH` of KWin's window (empty: the host decides) |
 | `KDE_NESTED_BUS` | `session` | `session` (the pod's bus) or `private` |
 
-Used by [pod-kde-vnc](https://github.com/opencharly/pod-kde-vnc),
-[pod-kde-selkies](https://github.com/opencharly/pod-kde-selkies) and
-[pod-kde-cstream](https://github.com/opencharly/pod-kde-cstream).
+Used by [pod-kde-vnc](https://github.com/opencharly/pod-kde-vnc) and
+[pod-kde-vnc-cdp](https://github.com/opencharly/pod-kde-vnc-cdp) (which composes
+pod-kde-vnc). [pod-kde-selkies](https://github.com/opencharly/pod-kde-selkies) and
+[pod-kde-cstream](https://github.com/opencharly/pod-kde-cstream) were the two earlier
+consumers; both were retired and archived by
+[opencharly/opencharly#1293](https://github.com/opencharly/opencharly/issues/1293).
