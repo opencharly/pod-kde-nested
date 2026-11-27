@@ -1,3 +1,9 @@
+import:
+    # The bed's builder map and the CDI GPU pod base: the nested KWin needs a compositor with GL, so
+    # the bed runs the same base the consumer pod uses (opencharly/pod-cdi), never a baked driver.
+    - arch: '@github.com/opencharly/distro-arch:v2026.330.1808'
+    - podcdi: '@github.com/opencharly/pod-cdi:v2026.330.1230'
+
 #  opencharly/pod-kde-nested — a full KDE Plasma session nested in a host Wayland
 #  compositor, as one supervised service any pod can compose.
 #
@@ -25,7 +31,7 @@ kde-nested:
             Which bus Plasma is on is the composing pod's choice, so KWin's renderer is
             asserted by each pod's own bed, on the bus it chose.
         require:
-            - '@github.com/opencharly/layer-kde-shell:v2026.326.2019'
+            - '@github.com/opencharly/layer-kde-shell:v2026.330.2234'
         env:
             KDE_NESTED_HOST_DISPLAY: wayland-0
             KDE_NESTED_SOCKET: wayland-kde
@@ -68,6 +74,34 @@ kde-nested:
               run_as: root
               command: |
                 setcap -r /usr/bin/kwin_wayland
+            # The session must NOT lock itself (opencharly/pod-kde-nested#6). MEASURED on a
+            # disposable pod: with no config the session locks itself inside Plasma's 5-minute
+            # Timeout (`kscreenlocker_greet` alive, ScreenSaver.GetActive true, no restarts, 35 min
+            # and 67 min); with this file present at session start the SAME pod stayed unlocked at
+            # 8 minutes (greeters=0, GetActive=false). `Lock` is the master switch and defaults true
+            # — Autolock/Timeout alone did NOT stop it. The keys are the ones
+            # /usr/share/config.kcfg/kscreenlockersettings.kcfg declares, and `kreadconfig6` in the
+            # pod returns them as written.
+            - run: write the session screen-locker policy
+              write: "${HOME}/.config/kscreenlockerrc"
+              mode: "0644"
+              run_as: "${USER}"
+              content: |
+                [Daemon]
+                Autolock=false
+                Timeout=0
+                Lock=false
+                LockOnResume=false
+            - check: the session's screen locker is DISABLED in the image, so the streamed desktop cannot lock itself
+              id: kde-nested-no-autolock
+              run_as: "${USER}"
+              file:
+                file: ${HOME}/.config/kscreenlockerrc
+                exists: true
+                contains:
+                  - contains: "Autolock=false"
+                  - contains: "Lock=false"
+                  - contains: "Timeout=0"
             - check: the kde-nested-session launcher is installed and executable
               id: kde-nested-launcher
               file:
@@ -139,3 +173,77 @@ kde-nested-skill:
             - KWin nested in a Wayland compositor
             - KDE_NESTED_HOST_DISPLAY
             - KDE_NESTED_BUS
+
+kde-nested-bed-image:
+    candy:
+        description: |
+            The image the nested-session bed runs: the CDI GPU pod base with the headless host
+            compositor and this repo's own kde-nested session, which is everything the lock
+            behaviour depends on.
+        base: podcdi.pod-cdi
+        platform:
+            - linux/amd64
+        build:
+            - pac
+        builder:
+            aur: arch.arch-builder
+        candy:
+            # The smallest host that can carry the session: sway (headless) + wayvnc, the same leaves
+            # the consumer pods compose, with no browser or desktop of their own.
+            - '@github.com/opencharly/pod-sway:v2026.328.1647'
+            - '@github.com/opencharly/pod-wayvnc:v2026.323.1735'
+            - kde-nested
+        plan:
+            # The image's own claim, asserted at build time: the bed it serves cannot pass on an image
+            # that lacks the unlock policy, so the image checks it itself as well.
+            - check: the image carries the session's unlock policy
+              id: kde-nested-bed-image-policy
+              file:
+                  file: /home/user/.config/kscreenlockerrc
+                  exists: true
+                  contains:
+                      - contains: "Lock=false"
+                      - contains: "Autolock=false"
+
+check-kde-nested-locked:
+    pod:
+        image: kde-nested-bed-image
+        disposable: true
+        lifecycle: dev
+        plan:
+            - check: the host compositor, the VNC server and the nested session are all RUNNING
+              id: bed-services
+              context: [runtime]
+              timeout: 180s
+              eventually: 120s
+              retry_interval: 5s
+              command:
+                  # ALL THREE must be RUNNING: a `contains: RUNNING` on the de-duplicated list passes
+                  # when any ONE of them is up, which is a check that cannot fail for its description.
+                  command: |
+                      supervisorctl status sway wayvnc kde-nested
+                      test "$(supervisorctl status sway wayvnc kde-nested | awk '{print $2}' | sort -u)" = RUNNING
+                  in_container: true
+              stdout:
+                  - contains: "RUNNING"
+            - check: the nested session has NOT locked itself after Plasma's idle Timeout
+              id: bed-unlocked-after-idle
+              context: [runtime]
+              timeout: 780s
+              exit_status: 0
+              command:
+                  # THE WAIT IS THE MEASUREMENT, not a workaround: at t0 a locked session is
+                  # indistinguishable from an unlocked one - the measured control reads unlocked at
+                  # 30 s and locks only past Plasma's 5-minute Timeout - so time is the only
+                  # instrument that discriminates. Seven minutes clears the 300 s default with margin.
+                  command: |
+                      sleep 420
+                      greeters=$(pgrep -fc 'kscreenlocker_[g]reet' || true)
+                      active=$(DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/dbus-session dbus-send --session --print-reply --dest=org.freedesktop.ScreenSaver /ScreenSaver org.freedesktop.ScreenSaver.GetActive 2>/dev/null | sed -n 's/.*boolean //p')
+                      echo "greeters=$greeters locked=$active"
+                      # FAIL CLOSED: an unreadable session bus is NOT an unlocked session, so the
+                      # D-Bus object must positively answer `false` as well as there being no greeter.
+                      [ "$greeters" -eq 0 ] && [ "$active" = "false" ]
+                  in_container: true
+              stdout:
+                  - contains: "greeters=0"
