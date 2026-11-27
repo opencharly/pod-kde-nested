@@ -1,3 +1,9 @@
+import:
+    # The bed's builder map and the CDI GPU pod base: the nested KWin needs a compositor with GL, so
+    # the bed runs the same base the consumer pod uses (opencharly/pod-cdi), never a baked driver.
+    - arch: '@github.com/opencharly/distro-arch:v2026.330.1808'
+    - podcdi: '@github.com/opencharly/pod-cdi:v2026.330.1230'
+
 #  opencharly/pod-kde-nested — a full KDE Plasma session nested in a host Wayland
 #  compositor, as one supervised service any pod can compose.
 #
@@ -167,3 +173,60 @@ kde-nested-skill:
             - KWin nested in a Wayland compositor
             - KDE_NESTED_HOST_DISPLAY
             - KDE_NESTED_BUS
+
+kde-nested-bed-image:
+    candy:
+        description: |
+            The image the nested-session bed runs: the CDI GPU pod base with the headless host
+            compositor and this repo's own kde-nested session, which is everything the lock
+            behaviour depends on.
+        base: podcdi.pod-cdi
+        platform:
+            - linux/amd64
+        build:
+            - pac
+        builder:
+            aur: arch.arch-builder
+        candy:
+            # The smallest host that can carry the session: sway (headless) + wayvnc, the same leaves
+            # the consumer pods compose, with no browser or desktop of their own.
+            - '@github.com/opencharly/pod-sway:v2026.328.1647'
+            - '@github.com/opencharly/pod-wayvnc:v2026.323.1735'
+            - kde-nested
+
+check-kde-nested-locked:
+    pod:
+        image: kde-nested-bed-image
+        disposable: true
+        lifecycle: dev
+        plan:
+            - check: the host compositor, the VNC server and the nested session are all RUNNING
+              id: bed-services
+              context: [runtime]
+              timeout: 180s
+              eventually: 120s
+              retry_interval: 5s
+              command:
+                  command: supervisorctl status sway wayvnc kde-nested | awk '{print $2}' | sort -u
+                  in_container: true
+              stdout:
+                  - contains: RUNNING
+            - check: the nested session has NOT locked itself after Plasma's idle Timeout
+              id: bed-unlocked-after-idle
+              context: [runtime]
+              timeout: 780s
+              exit_status: 0
+              command:
+                  # The WAIT IS THE MEASUREMENT: a lock is indistinguishable from an unlocked session
+              # at t0 — the measured control is unlocked at 30 s and locks only past Plasma's
+              # 5-minute Timeout — so the only instrument that discriminates is time itself. Seven
+              # minutes clears the default Timeout (300 s) with margin.
+                  command: |
+                      sleep 420
+                      n=$(pgrep -fc 'kscreenlocker_[g]reet' || true)
+                      active=$(DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/dbus-session                         dbus-send --session --print-reply --dest=org.freedesktop.ScreenSaver                         /ScreenSaver org.freedesktop.ScreenSaver.GetActive 2>/dev/null | sed -n 's/.*boolean //p')
+                      echo "greeters=$n locked=$active"
+                      [ "$n" -eq 0 ] && [ "$active" != "true" ]
+                  in_container: true
+              stdout:
+                  - contains: "greeters=0"
