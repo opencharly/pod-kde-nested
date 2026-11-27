@@ -193,6 +193,17 @@ kde-nested-bed-image:
             - '@github.com/opencharly/pod-sway:v2026.328.1647'
             - '@github.com/opencharly/pod-wayvnc:v2026.323.1735'
             - kde-nested
+        plan:
+            # The image's own claim, asserted at build time: the bed it serves cannot pass on an image
+            # that lacks the unlock policy, so the image checks it itself as well.
+            - check: the image carries the session's unlock policy
+              id: kde-nested-bed-image-policy
+              file:
+                  file: /home/user/.config/kscreenlockerrc
+                  exists: true
+                  contains:
+                      - contains: "Lock=false"
+                      - contains: "Autolock=false"
 
 check-kde-nested-locked:
     pod:
@@ -207,10 +218,14 @@ check-kde-nested-locked:
               eventually: 120s
               retry_interval: 5s
               command:
-                  command: supervisorctl status sway wayvnc kde-nested | awk '{print $2}' | sort -u
+                  # ALL THREE must be RUNNING: a `contains: RUNNING` on the de-duplicated list passes
+                  # when any ONE of them is up, which is a check that cannot fail for its description.
+                  command: |
+                      supervisorctl status sway wayvnc kde-nested
+                      test "$(supervisorctl status sway wayvnc kde-nested | awk '{print $2}' | sort -u)" = RUNNING
                   in_container: true
               stdout:
-                  - contains: RUNNING
+                  - contains: "RUNNING"
             - check: the nested session has NOT locked itself after Plasma's idle Timeout
               id: bed-unlocked-after-idle
               context: [runtime]
