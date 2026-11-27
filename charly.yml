@@ -25,7 +25,7 @@ kde-nested:
             Which bus Plasma is on is the composing pod's choice, so KWin's renderer is
             asserted by each pod's own bed, on the bus it chose.
         require:
-            - '@github.com/opencharly/layer-kde-shell:v2026.326.2019'
+            - '@github.com/opencharly/layer-kde-shell:v2026.330.2234'
         env:
             KDE_NESTED_HOST_DISPLAY: wayland-0
             KDE_NESTED_SOCKET: wayland-kde
@@ -68,6 +68,33 @@ kde-nested:
               run_as: root
               command: |
                 setcap -r /usr/bin/kwin_wayland
+            # The session must NOT lock itself (opencharly/pod-kde-nested#6). MEASURED on a
+            # disposable pod: with no config the session locks itself inside Plasma's 5-minute
+            # Timeout (`kscreenlocker_greet` alive, ScreenSaver.GetActive true, no restarts, 35 min
+            # and 67 min); with this file present at session start the SAME pod stayed unlocked at
+            # 8 minutes (greeters=0, GetActive=false). `Lock` is the master switch and defaults true
+            # — Autolock/Timeout alone did NOT stop it. The keys are the ones
+            # /usr/share/config.kcfg/kscreenlockersettings.kcfg declares, and `kreadconfig6` in the
+            # pod returns them as written.
+            - run: write=/home/user/.config/kscreenlockerrc
+              write: "${HOME}/.config/kscreenlockerrc"
+              mode: "0644"
+              run_as: "${USER}"
+              content: |
+                [Daemon]
+                Autolock=false
+                Timeout=0
+                Lock=false
+                LockOnResume=false
+            - check: the session's screen locker is DISABLED in the image, so the streamed desktop cannot lock itself
+              id: kde-nested-no-autolock
+              file:
+                file: ${HOME}/.config/kscreenlockerrc
+                exists: true
+                contains:
+                  - contains: "Autolock=false"
+                  - contains: "Lock=false"
+                  - contains: "Timeout=0"
             - check: the kde-nested-session launcher is installed and executable
               id: kde-nested-launcher
               file:
