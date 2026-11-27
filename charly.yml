@@ -88,6 +88,7 @@ kde-nested:
                 LockOnResume=false
             - check: the session's screen locker is DISABLED in the image, so the streamed desktop cannot lock itself
               id: kde-nested-no-autolock
+              run_as: "${USER}"
               file:
                 file: ${HOME}/.config/kscreenlockerrc
                 exists: true
