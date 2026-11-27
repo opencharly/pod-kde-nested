@@ -42,12 +42,9 @@ earlier one's.
 | pod-kde-vnc-cdp | sway `wayland-0` | `wayland-kde` | `/tmp` | `1920x1080` | session |
 
 pod-kde-vnc-cdp composes pod-kde-vnc, so it inherits the same five knobs and adds only
-Chrome — there is no second nested-session configuration.
-
-Two former consumers, `pod-kde-selkies` (pixelflux `wayland-1`, private bus, `1280x720`)
-and `pod-kde-cstream` (the cstream streamer), were retired and archived by
-opencharly/opencharly#1293 together with their skills. The `KDE_NESTED_BUS=private` knob
-stays: a compositor whose session bus the venue's `dbus:` verb cannot see still needs it.
+Chrome — there is no second nested-session configuration. The `KDE_NESTED_BUS=private`
+knob stays: a compositor whose session bus the venue's `dbus:` verb cannot see still
+needs it.
 
 ## Things that were measured, not assumed
 
