@@ -69,7 +69,7 @@ chose, e.g. `dbus: call org.kde.KWin /KWin org.kde.KWin.supportInformation`.
 ## Cross-references
 
 - `/charly-selkies:kde-shell`: the Plasma package set.
-- `/charly-selkies:kde-vnc`, `/charly-selkies:kde-selkies`, `/charly-selkies:kde-cstream`:
-  the pods that compose this leaf.
+- `/charly-selkies:kde-vnc`:
+  the pod that composes this leaf.
 - `/charly-check:dbus`, `/charly-check:wl`: the verbs the pods' beds use against the
   nested session.
