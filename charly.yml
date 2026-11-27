@@ -82,7 +82,7 @@ kde-nested:
             # — Autolock/Timeout alone did NOT stop it. The keys are the ones
             # /usr/share/config.kcfg/kscreenlockersettings.kcfg declares, and `kreadconfig6` in the
             # pod returns them as written.
-            - run: write=/home/user/.config/kscreenlockerrc
+            - run: write the session screen-locker policy
               write: "${HOME}/.config/kscreenlockerrc"
               mode: "0644"
               run_as: "${USER}"
@@ -217,16 +217,18 @@ check-kde-nested-locked:
               timeout: 780s
               exit_status: 0
               command:
-                  # The WAIT IS THE MEASUREMENT: a lock is indistinguishable from an unlocked session
-              # at t0 — the measured control is unlocked at 30 s and locks only past Plasma's
-              # 5-minute Timeout — so the only instrument that discriminates is time itself. Seven
-              # minutes clears the default Timeout (300 s) with margin.
+                  # THE WAIT IS THE MEASUREMENT, not a workaround: at t0 a locked session is
+                  # indistinguishable from an unlocked one - the measured control reads unlocked at
+                  # 30 s and locks only past Plasma's 5-minute Timeout - so time is the only
+                  # instrument that discriminates. Seven minutes clears the 300 s default with margin.
                   command: |
                       sleep 420
-                      n=$(pgrep -fc 'kscreenlocker_[g]reet' || true)
-                      active=$(DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/dbus-session                         dbus-send --session --print-reply --dest=org.freedesktop.ScreenSaver                         /ScreenSaver org.freedesktop.ScreenSaver.GetActive 2>/dev/null | sed -n 's/.*boolean //p')
-                      echo "greeters=$n locked=$active"
-                      [ "$n" -eq 0 ] && [ "$active" != "true" ]
+                      greeters=$(pgrep -fc 'kscreenlocker_[g]reet' || true)
+                      active=$(DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/dbus-session dbus-send --session --print-reply --dest=org.freedesktop.ScreenSaver /ScreenSaver org.freedesktop.ScreenSaver.GetActive 2>/dev/null | sed -n 's/.*boolean //p')
+                      echo "greeters=$greeters locked=$active"
+                      # FAIL CLOSED: an unreadable session bus is NOT an unlocked session, so the
+                      # D-Bus object must positively answer `false` as well as there being no greeter.
+                      [ "$greeters" -eq 0 ] && [ "$active" = "false" ]
                   in_container: true
               stdout:
                   - contains: "greeters=0"
